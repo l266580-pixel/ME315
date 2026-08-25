@@ -1,0 +1,157 @@
+---
+title: "lab02"
+author: "Lucas Goes"
+format: pdf
+editor: visual
+---
+
+## 1
+
+As estatísticas nescessárias são as seguintes:
+
+```{r}
+#n = número total de voos
+#atrasados = número de voos com ARRIVAL_DELAY > 10
+```
+
+Com isso, conseguimos a porcentagem total
+
+## 2
+
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2)
+getStats <- function(input, pos) {
+  
+  input %>%
+    filter(AIRLINE %in% c("AA", "DL", "UA", "US")) %>%
+    filter(!is.na(DAY),
+           !is.na(MONTH),
+           !is.na(AIRLINE),
+           !is.na(ARRIVAL_DELAY)) %>%
+    group_by(DAY, MONTH, AIRLINE) %>%
+    summarise(
+      n = n(),
+      atrasados = sum(ARRIVAL_DELAY > 10),
+      .groups = "drop"
+    )
+}
+
+```
+
+## 3
+
+```{r}
+callback <- DataFrameCallback$new(getStats)
+
+read_csv_chunked(
+  "flights.csv",
+  callback = callback,
+  chunk_size = 100000,
+  col_types = cols_only(
+    DAY = col_integer(),
+    MONTH = col_integer(),
+    AIRLINE = col_character(),
+    ARRIVAL_DELAY = col_double()
+  ),
+  progress = FALSE
+)
+```
+
+## 4
+
+```{r}
+computeStats <- function(stats) {
+  
+  stats %>%
+    group_by(AIRLINE, MONTH, DAY) %>%
+    summarise(
+      Total = sum(Total),
+      Atrasados = sum(Atrasados),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      Cia = AIRLINE,
+      Data = as.Date(
+        paste(2015, MONTH, DAY, sep = "-")
+      ),
+      Perc = Atrasados / Total
+    ) %>%
+    select(Cia, Data, Perc)
+  
+}
+```
+
+## 5
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+dados <- read_csv("flights.csv")
+
+stats <- dados %>%
+  filter(AIRLINE %in% c("AA","DL","UA","US")) %>%
+  filter(!is.na(ARRIVAL_DELAY)) %>%
+  group_by(AIRLINE, MONTH, DAY) %>%
+  summarise(
+    Total = n(),
+    Atrasados = sum(ARRIVAL_DELAY > 10),
+    .groups = "drop"
+  )
+
+resultado <- stats %>%
+  mutate(
+    Cia = AIRLINE,
+    Data = as.Date(paste(2015, MONTH, DAY, sep = "-")),
+    Perc = Atrasados / Total
+  ) %>%
+  select(Cia, Data, Perc)
+
+baseCalendario <- function(stats, cia){
+  
+  stats %>%
+    filter(Cia == cia) %>%
+    mutate(
+      Mes = factor(format(Data,"%b"), levels = month.abb),
+      Dia = as.numeric(format(Data,"%d"))
+    ) %>%
+    ggplot(aes(Dia, Mes, fill = Perc)) +
+    geom_tile(color = "white") +
+    scale_fill_gradient(
+      low = "#4575b4",
+      high = "#d73027"
+    ) +
+    labs(
+      x = "Dia",
+      y = "Mês",
+      fill = "Percentual"
+    ) +
+    theme_minimal()
+  
+}
+
+cAA <- baseCalendario(resultado,"AA") +
+  ggtitle("Percentual de Atrasos - AA")
+
+cDL <- baseCalendario(resultado,"DL") +
+  ggtitle("Percentual de Atrasos - DL")
+
+cUA <- baseCalendario(resultado,"UA") +
+  ggtitle("Percentual de Atrasos - UA")
+
+cUS <- baseCalendario(resultado,"US") +
+  ggtitle("Percentual de Atrasos - US")
+
+cAA
+cDL
+cUA
+cUS
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
